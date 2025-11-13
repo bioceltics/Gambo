@@ -1,0 +1,33 @@
+{
+  "status": "idle",
+  "currentStep": "Failed",
+  "progress": {
+    "fixturesFetched": 0,
+    "fixturesAnalyzed": 0,
+    "bundlesCreated": 0,
+    "totalFixtures": 0
+  },
+  "activities": [
+    "🚀 Bundle generation started",
+    "[10:43:21 PM] 🔧 Initializing bundle generation",
+    "[10:43:21 PM] 📦 7 bundles currently active",
+    "[10:43:21 PM] 🌍 Fetching fixtures from all sports",
+    "[10:43:21 PM] ⚽ Fetching soccer fixtures",
+    "[10:43:21 PM] ⚽ Fetching soccer fixtures from global leagues",
+    "[10:43:21 PM] ⚽ Found 0 soccer fixtures",
+    "[10:43:21 PM] ✅ Processed all 0 soccer fixtures",
+    "[10:43:21 PM] 🏀 Fetching basketball fixtures from global leagues",
+    "[10:43:21 PM] 🏀 Found 0 basketball fixtures",
+    "[10:43:21 PM] 🎾 Fetching tennis fixtures from global tournaments",
+    "[10:43:21 PM] 🎾 Found 0 tennis fixtures",
+    "[10:43:21 PM] 🏒 Fetching hockey fixtures from global leagues",
+    "[10:43:22 PM] 🏒 Found 0 hockey fixtures",
+    "[10:43:22 PM] 🏈 Fetching football fixtures from global leagues",
+    "[10:43:22 PM] 🏈 Found 0 football fixtures",
+    "[10:43:45 PM] ✅ Analyzed 0 betting opportunities",
+    "[10:43:45 PM] ❌ Generation failed: No fixtures found for tomorrow"
+  ],
+  "startTime": "2025-11-13T06:43:21.455Z",
+  "errorMessage": "No fixtures found for tomorrow",
+  "endTime": "2025-11-13T06:43:45.764Z"
+}

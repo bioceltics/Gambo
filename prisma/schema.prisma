@@ -1,0 +1,264 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+enum SubscriptionTier {
+  FREE
+  BASIC
+  PRO
+  ULTIMATE
+}
+
+enum BundleType {
+  STANDARD
+  BTTS
+  PLUS_50_ODDS
+  WEEKEND_PLUS_10
+  PLAYERS_TO_SCORE
+  UNDER_OVER
+}
+
+enum GameStatus {
+  UPCOMING
+  LIVE
+  FINISHED
+  CANCELLED
+}
+
+enum Sport {
+  SOCCER
+  BASKETBALL
+  FOOTBALL
+  TENNIS
+  HOCKEY
+}
+
+model User {
+  id                String             @id @default(cuid())
+  email             String             @unique
+  name              String?
+  password          String
+  subscriptionTier  SubscriptionTier   @default(FREE)
+  stripeCustomerId  String?            @unique
+  subscriptionId    String?            @unique
+  subscriptionEndsAt DateTime?
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+
+  notifications     Notification[]
+  customBundleRequests CustomBundleRequest[]
+
+  @@index([email])
+}
+
+model Bundle {
+  id              String        @id @default(cuid())
+  name            String
+  type            BundleType
+  confidence      Int           // Percentage 0-100
+  expectedReturn  Float
+  tierAccess      SubscriptionTier  // Minimum tier required
+  isActive        Boolean       @default(true)
+  createdAt       DateTime      @default(now())
+  publishedAt     DateTime?
+  archivedAt      DateTime?     // When bundle was archived
+
+  games           BundleGame[]
+  performance     BundlePerformance?
+
+  @@index([type, isActive])
+  @@index([publishedAt])
+  @@index([archivedAt])
+}
+
+model Game {
+  id              String        @id @default(cuid())
+  sport           Sport
+  homeTeam        String
+  awayTeam        String
+  league          String
+  scheduledAt     DateTime
+  status          GameStatus    @default(UPCOMING)
+
+  // Live Score Data
+  homeScore       Int?
+  awayScore       Int?
+  currentPeriod   String?       // Quarter, Half, Set, etc.
+
+  // Metadata
+  venue           String?
+  weather         String?
+
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  bundles         BundleGame[]
+  liveStats       LiveGameStats?
+
+  @@index([sport, scheduledAt])
+  @@index([status])
+}
+
+model BundleGame {
+  id              String        @id @default(cuid())
+  bundleId        String
+  gameId          String
+
+  // Pick Information
+  pick            String        // e.g., "Over 2.5 Goals", "Warriors -4.5"
+  betType         String        @default("h2h") // h2h, doubleChance, totals, btts, handicap
+  odds            Float
+
+  // Analysis Data
+  summary         String
+  recentForm      String?
+  headToHead      String?
+  injuries        String?
+  advancedMetrics String?
+  weatherConditions String?
+  motivationFactors String?
+  setPieceAnalysis  String?
+  styleMatchup    String?
+  playerForm      String?
+  marketIntelligence String?
+
+  // Result
+  result          String?       // WIN, LOSS, PUSH
+
+  bundle          Bundle        @relation(fields: [bundleId], references: [id], onDelete: Cascade)
+  game            Game          @relation(fields: [gameId], references: [id])
+
+  @@index([bundleId])
+  @@index([gameId])
+  @@index([betType])
+}
+
+model LiveGameStats {
+  id              String        @id @default(cuid())
+  gameId          String        @unique
+
+  // Soccer Stats
+  possession      Json?         // { home: 55, away: 45 }
+  shots           Json?
+  shotsOnTarget   Json?
+  corners         Json?
+  xG              Json?
+  passAccuracy    Json?
+
+  // Basketball Stats
+  fieldGoalPct    Json?
+  threePointPct   Json?
+  rebounds        Json?
+  assists         Json?
+
+  // Football Stats
+  totalYards      Json?
+  passingYards    Json?
+  rushingYards    Json?
+
+  // Tennis Stats
+  aces            Json?
+  doubleFaults    Json?
+  firstServesPct  Json?
+  breakPoints     Json?
+
+  updatedAt       DateTime      @updatedAt
+
+  game            Game          @relation(fields: [gameId], references: [id], onDelete: Cascade)
+}
+
+model BundlePerformance {
+  id              String        @id @default(cuid())
+  bundleId        String        @unique
+
+  totalGames      Int           @default(0)
+  wins            Int           @default(0)
+  losses          Int           @default(0)
+  pushes          Int           @default(0)
+  actualReturn    Float?
+
+  updatedAt       DateTime      @updatedAt
+
+  bundle          Bundle        @relation(fields: [bundleId], references: [id], onDelete: Cascade)
+}
+
+model Notification {
+  id              String        @id @default(cuid())
+  userId          String
+  title           String
+  message         String
+  type            String        // GOAL, ALERT, BUNDLE, ODDS_CHANGE
+  isRead          Boolean       @default(false)
+  createdAt       DateTime      @default(now())
+
+  user            User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, isRead])
+}
+
+model CustomBundleRequest {
+  id              String        @id @default(cuid())
+  userId          String
+  description     String
+  sport           Sport?
+  status          String        @default("PENDING") // PENDING, IN_PROGRESS, COMPLETED
+  createdAt       DateTime      @default(now())
+
+  user            User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model AnalyzedGame {
+  id                String        @id @default(cuid())
+  sport             Sport
+  country           String
+  competition       String        // League/Tournament name
+  homeTeam          String
+  awayTeam          String
+  scheduledAt       DateTime
+
+  // Analysis Results
+  recommendedPick   String        // e.g., "Home Win", "Over 2.5", "BTTS Yes"
+  betType           String        // h2h, totals, btts, handicap, doubleChance
+  odds              Float
+  confidenceScore   Int           // 0-100
+
+  // Detailed Analysis
+  summary           String
+  recentForm        String
+  headToHead        String
+  injuries          String
+  advancedMetrics   String
+  weatherConditions String
+  motivationFactors String
+  setPieceAnalysis  String?
+  styleMatchup      String?
+  playerForm        String?
+  marketIntelligence String?
+
+  // Selected for bundle or not
+  selectedForBundle Boolean       @default(false)
+  bundleId          String?
+
+  // Metadata
+  analyzedAt        DateTime      @default(now())
+  generationDate    DateTime      // Date of bundle generation run
+
+  @@index([sport, generationDate])
+  @@index([country, competition])
+  @@index([scheduledAt])
+  @@index([selectedForBundle])
+  @@index([confidenceScore])
+}
