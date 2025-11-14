@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { ChevronDown, ChevronUp, TrendingUp, Target, Trophy, Sparkles, Lock } from 'lucide-react';
+import { ChevronDown, ChevronUp, TrendingUp, Target, Trophy, Sparkles } from 'lucide-react';
 import { formatOdds } from '@/lib/utils';
 
 interface GameAnalysis {
@@ -33,6 +33,7 @@ interface GameInfo {
   homeScore?: number | null;
   awayScore?: number | null;
   result?: string | null;
+  currentPeriod?: string | null; // e.g., "45'", "HT", "2nd Half"
   analysis: GameAnalysis;
 }
 
@@ -242,8 +243,8 @@ export function BundleCard({ bundle, bundleNumber }: BundleCardProps) {
   // Check bundle status
   const allGamesFinished = bundle.games.every(g => g.status === 'FINISHED' || g.status === 'CANCELLED');
   const hasLiveGames = bundle.games.some(g => g.status === 'INPLAY' || g.status === 'LIVE');
-  const bundleWon = bundle.performance && bundle.performance.actualReturn !== null && bundle.performance.actualReturn > 0;
-  const bundleLost = bundle.performance && bundle.performance.actualReturn === -1; // Lost immediately when any game is LOSS
+  const bundleWon = bundle.performance && bundle.performance.actualReturn !== null && bundle.performance.actualReturn !== undefined && bundle.performance.actualReturn > 0;
+  const bundleLost = bundle.performance && bundle.performance.actualReturn !== null && bundle.performance.actualReturn !== undefined && bundle.performance.actualReturn === -1; // Lost immediately when any game is LOSS
 
   // Get odds card status colors
   const getOddsCardStatus = () => {
