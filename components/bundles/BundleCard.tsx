@@ -243,8 +243,9 @@ export function BundleCard({ bundle, bundleNumber }: BundleCardProps) {
   // Check bundle status
   const allGamesFinished = bundle.games.every(g => g.status === 'FINISHED' || g.status === 'CANCELLED');
   const hasLiveGames = bundle.games.some(g => g.status === 'INPLAY' || g.status === 'LIVE');
-  const bundleWon = bundle.performance && bundle.performance.actualReturn !== null && bundle.performance.actualReturn !== undefined && bundle.performance.actualReturn > 0;
-  const bundleLost = bundle.performance && bundle.performance.actualReturn !== null && bundle.performance.actualReturn !== undefined && bundle.performance.actualReturn === -1; // Lost immediately when any game is LOSS
+  const actualReturn = bundle.performance?.actualReturn ?? null;
+  const bundleWon = actualReturn !== null && actualReturn > 0;
+  const bundleLost = actualReturn === -1; // Lost immediately when any game is LOSS
 
   // Get odds card status colors
   const getOddsCardStatus = () => {
