@@ -8,6 +8,29 @@
  * - /api/ng/factsCenter/popularAndSportList - Get leagues and tournaments
  */
 
+export interface SportyBetOddsOutcome {
+  id: string;
+  odds: string;
+  probability: string;
+  isActive: number;
+  desc: string;
+  specifier?: string;
+}
+
+export interface SportyBetMarket {
+  id: string;
+  product: number;
+  desc: string;
+  status: number;
+  group: string;
+  groupId: string;
+  marketGuide: string;
+  title: string;
+  name: string;
+  favourite: number;
+  outcomes: SportyBetOddsOutcome[];
+}
+
 export interface SportyBetGame {
   sport: string;
   league: string;
@@ -16,6 +39,10 @@ export interface SportyBetGame {
   awayTeam: string;
   matchTime: Date;
   marketId?: string;
+  eventId?: string;
+  gameId?: string;
+  totalMarketSize?: number;
+  markets?: SportyBetMarket[];
 }
 
 export interface SportyBetLeague {
@@ -93,6 +120,10 @@ export async function fetchSportyBetGames(): Promise<SportyBetGame[]> {
                   awayTeam: event.awayTeamName || 'Away',
                   matchTime: new Date(event.estimateStartTime || Date.now()),
                   marketId: event.eventId || event.gameId,
+                  eventId: event.eventId,
+                  gameId: event.gameId,
+                  totalMarketSize: event.totalMarketSize || 0,
+                  markets: event.markets || [],
                 });
                 sportEventCount++;
               }
