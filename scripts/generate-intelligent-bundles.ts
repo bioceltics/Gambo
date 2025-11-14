@@ -39,6 +39,13 @@ import {
 } from '../lib/betsapi';
 import { performMasterAnalysis } from '../lib/team-quality-analyzer';
 import { generationStatusManager } from '../lib/generation-status';
+import {
+  fetchSportyBetGames,
+  fetchSportyBetLeagues,
+  isGameOnSportyBet,
+  getFilteringStats,
+  SportyBetGame
+} from '../lib/sportybetScraper';
 
 const prisma = new PrismaClient();
 const aiAnalyzer = new AIMatchAnalyzer();
@@ -1071,6 +1078,58 @@ async function generateIntelligentBundles() {
   if (allBets.length === 0) {
     console.log('❌ No fixtures found\n');
     generationStatusManager.failGeneration('No fixtures found for tomorrow');
+    return;
+  }
+
+  // FILTER BY SPORTYBET AVAILABILITY - Only analyze games available on SportyBet Nigeria
+  console.log('\n🎯 FILTERING BY SPORTYBET AVAILABILITY...\n');
+  console.log('   Fetching available games from SportyBet Nigeria to optimize API usage...');
+  generationStatusManager.updateStep('🎯 Filtering games by SportyBet availability');
+  generationStatusManager.addActivity('🎯 Fetching SportyBet games for filtering');
+
+  const sportyBetGames = await fetchSportyBetGames();
+  const sportyBetLeagues = await fetchSportyBetLeagues();
+
+  console.log(`   Found ${sportyBetGames.length} games on SportyBet\n`);
+  console.log(`   Found ${sportyBetLeagues.length} active leagues on SportyBet\n`);
+
+  const originalCount = allBets.length;
+  const filteredBets = allBets.filter(bet => {
+    // Check if this game is available on SportyBet
+    return isGameOnSportyBet(
+      {
+        homeTeam: bet.homeTeam,
+        awayTeam: bet.awayTeam,
+        leagueName: bet.league
+      },
+      sportyBetGames
+    );
+  });
+
+  const filterStats = getFilteringStats(originalCount, filteredBets.length);
+
+  console.log('   ╔═══════════════════════════════════════════════════════════════╗');
+  console.log(`   ║  📊 SPORTYBET FILTERING STATISTICS                           ║`);
+  console.log('   ╠═══════════════════════════════════════════════════════════════╣');
+  console.log(`   ║  Total games analyzed:        ${originalCount.toString().padEnd(28)} ║`);
+  console.log(`   ║  Games on SportyBet:          ${filteredBets.length.toString().padEnd(28)} ║`);
+  console.log(`   ║  Games filtered out:          ${filterStats.removed.toString().padEnd(28)} ║`);
+  console.log(`   ║  Reduction:                   ${filterStats.percentageReduction}%${' '.repeat(26)} ║`);
+  console.log(`   ║  API requests saved:          ${filterStats.apiRequestsSaved.toString().padEnd(28)} ║`);
+  console.log(`   ║  Cost savings:                ~$${(filterStats.apiRequestsSaved * 0.001).toFixed(2).padEnd(25)} ║`);
+  console.log('   ╚═══════════════════════════════════════════════════════════════╝\n');
+
+  generationStatusManager.addActivity(`🎯 Filtered to ${filteredBets.length} games (saved ${filterStats.apiRequestsSaved} API requests)`);
+
+  // Update allBets to only include filtered games
+  allBets.length = 0;
+  allBets.push(...filteredBets);
+
+  console.log(`✅ Proceeding with ${allBets.length} games available on SportyBet Nigeria\n`);
+
+  if (allBets.length === 0) {
+    console.log('❌ No games found on SportyBet after filtering\n');
+    generationStatusManager.failGeneration('No games available on SportyBet for tomorrow');
     return;
   }
 
