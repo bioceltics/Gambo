@@ -5,6 +5,9 @@
 
 import { Sport, GameStatus } from '@prisma/client';
 
+// Re-export Prisma types
+export { Sport, GameStatus };
+
 // ============================================================================
 // DATA LAYER TYPES
 // ============================================================================

@@ -10,16 +10,16 @@ interface GameAnalysis {
   pick: string;
   odds: number;
   summary: string;
-  recentForm?: string;
-  headToHead?: string;
-  injuries?: string;
-  advancedMetrics?: string;
-  weatherConditions?: string;
-  motivationFactors?: string;
-  setPieceAnalysis?: string;
-  styleMatchup?: string;
-  playerForm?: string;
-  marketIntelligence?: string;
+  recentForm?: string | null;
+  headToHead?: string | null;
+  injuries?: string | null;
+  advancedMetrics?: string | null;
+  weatherConditions?: string | null;
+  motivationFactors?: string | null;
+  setPieceAnalysis?: string | null;
+  styleMatchup?: string | null;
+  playerForm?: string | null;
+  marketIntelligence?: string | null;
 }
 
 interface GameInfo {

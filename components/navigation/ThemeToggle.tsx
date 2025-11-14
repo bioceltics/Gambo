@@ -10,9 +10,9 @@ export function ThemeToggle() {
   return (
     <Button
       variant="ghost"
-      size="icon"
+      size="sm"
       onClick={toggleTheme}
-      className="relative w-9 h-9 text-gray-400 hover:text-blue-400 hover:bg-blue-600/10 transition-colors"
+      className="relative w-9 h-9 p-0 text-gray-400 hover:text-blue-400 hover:bg-blue-600/10 transition-colors"
       aria-label="Toggle theme"
     >
       {theme === 'dark' ? (
