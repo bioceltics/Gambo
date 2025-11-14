@@ -1,6 +1,6 @@
 {
-  "status": "idle",
-  "currentStep": "Failed",
+  "status": "generating",
+  "currentStep": "⚽ Fetching soccer fixtures",
   "progress": {
     "fixturesFetched": 0,
     "fixturesAnalyzed": 0,
@@ -8,26 +8,26 @@
     "totalFixtures": 0
   },
   "activities": [
-    "🚀 Bundle generation started",
-    "[10:43:21 PM] 🔧 Initializing bundle generation",
-    "[10:43:21 PM] 📦 7 bundles currently active",
-    "[10:43:21 PM] 🌍 Fetching fixtures from all sports",
-    "[10:43:21 PM] ⚽ Fetching soccer fixtures",
-    "[10:43:21 PM] ⚽ Fetching soccer fixtures from global leagues",
-    "[10:43:21 PM] ⚽ Found 0 soccer fixtures",
-    "[10:43:21 PM] ✅ Processed all 0 soccer fixtures",
-    "[10:43:21 PM] 🏀 Fetching basketball fixtures from global leagues",
-    "[10:43:21 PM] 🏀 Found 0 basketball fixtures",
-    "[10:43:21 PM] 🎾 Fetching tennis fixtures from global tournaments",
-    "[10:43:21 PM] 🎾 Found 0 tennis fixtures",
-    "[10:43:21 PM] 🏒 Fetching hockey fixtures from global leagues",
-    "[10:43:22 PM] 🏒 Found 0 hockey fixtures",
-    "[10:43:22 PM] 🏈 Fetching football fixtures from global leagues",
-    "[10:43:22 PM] 🏈 Found 0 football fixtures",
-    "[10:43:45 PM] ✅ Analyzed 0 betting opportunities",
-    "[10:43:45 PM] ❌ Generation failed: No fixtures found for tomorrow"
+    "[4:41:35 AM] 🏀 Analyzing International • Uruguay Liga",
+    "[4:41:44 AM] 🏀 Analyzing International • Colombia Liga",
+    "[4:41:56 AM] 🏀 Analyzing International • Argentina Liga Nacional",
+    "[4:41:58 AM] 🏀 Analyzing International • NBA",
+    "[4:42:06 AM] 🏀 Analyzing International • Argentina La Liga",
+    "[4:42:08 AM] 🏀 Analyzing International • Costa Rica LDD U24",
+    "[4:42:54 AM] 🏀 Analyzing International • Japan B League 3",
+    "[4:42:56 AM] 🏀 Analyzing International • Korea KBL",
+    "[4:43:00 AM] 🏀 Analyzing International • Japan B League 2",
+    "[4:43:02 AM] 🏀 Analyzing International • Japan B League 1",
+    "[4:43:30 AM] 🏀 Analyzing International • Australia NBL",
+    "[4:43:32 AM] 🏀 Analyzing International • Taiwan TPBL",
+    "[4:43:42 AM] 🏀 Analyzing International • Lithuania NKL",
+    "[4:43:46 AM] 🏀 Analyzing International • Norway Ligaen",
+    "[4:43:48 AM] 🏀 Analyzing International • Kosovo Superliga",
+    "[4:43:54 AM] 🏀 Analyzing International • Austria 2 Liga",
+    "[4:43:56 AM] 🏀 Analyzing International • Turkiye TBL",
+    "[4:44:05 AM] 🏀 Analyzing International • Poland 1st Division",
+    "[4:44:07 AM] 🏀 Analyzing International • Cyprus Division A",
+    "[4:44:09 AM] 🎾 Fetching tennis fixtures from global tournaments"
   ],
-  "startTime": "2025-11-13T06:43:21.455Z",
-  "errorMessage": "No fixtures found for tomorrow",
-  "endTime": "2025-11-13T06:43:45.764Z"
+  "startTime": "2025-11-14T06:10:41.850Z"
 }

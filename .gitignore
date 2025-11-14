@@ -44,3 +44,7 @@ next-env.d.ts
 
 # Bundle generation logs
 logs/*.log
+
+# Local documentation with sensitive credentials
+VERCEL-ENV-VARIABLES.md
+VERCEL-DATABASE-SETUP.md
