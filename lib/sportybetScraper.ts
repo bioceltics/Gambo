@@ -2,18 +2,11 @@
  * SportyBet Nigeria Scraper
  * Fetches available games and leagues from SportyBet to filter our analysis
  *
- * NOTE: SportyBet uses JavaScript to load content dynamically.
- * This scraper provides the framework for filtering games.
- * For production use, consider:
- * 1. Using Puppeteer/Playwright for JavaScript rendering
- * 2. Reverse-engineering SportyBet's API endpoints
- * 3. Using a headless browser service
- *
- * Current implementation uses static HTML parsing as a starting point.
- * May need refinement based on SportyBet's actual HTML structure.
+ * Uses SportyBet's official API endpoints discovered via network analysis:
+ * - /api/ng/factsCenter/pcUpcomingEvents - Get upcoming games
+ * - /api/ng/factsCenter/sportList - Get available sports
+ * - /api/ng/factsCenter/popularAndSportList - Get leagues and tournaments
  */
-
-import * as cheerio from 'cheerio';
 
 export interface SportyBetGame {
   sport: string;
@@ -46,73 +39,77 @@ function normalizeTeamName(name: string): string {
 }
 
 /**
- * Fetch available games from SportyBet Nigeria
+ * Fetch available games from SportyBet Nigeria using official API
  */
 export async function fetchSportyBetGames(): Promise<SportyBetGame[]> {
   const games: SportyBetGame[] = [];
 
   try {
-    console.log('🔍 Fetching available games from SportyBet Nigeria...');
+    console.log('🔍 Fetching available games from SportyBet Nigeria API...');
 
-    // SportyBet uses a sports API endpoint that returns JSON
-    // We'll fetch the main sports page and extract the data
-    const baseUrl = 'https://www.sportybet.com/ng/sport/football/today';
+    // Map sport IDs to sport names
+    const sports = [
+      { id: 'sr:sport:1', name: 'Soccer' },
+      { id: 'sr:sport:2', name: 'Basketball' },
+      { id: 'sr:sport:5', name: 'Tennis' },
+      { id: 'sr:sport:4', name: 'Ice Hockey' },
+      { id: 'sr:sport:16', name: 'American Football' },
+    ];
 
-    const response = await fetch(baseUrl, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-        'Accept-Language': 'en-US,en;q=0.5',
-      },
-    });
+    for (const sport of sports) {
+      try {
+        const timestamp = Date.now();
+        const url = `https://www.sportybet.com/api/ng/factsCenter/pcUpcomingEvents?sportId=${encodeURIComponent(sport.id)}&marketId=1,18,10,29,11,26,36,14,60100&pageSize=100&pageNum=1&todayGames=true&timeline=15.9&_t=${timestamp}`;
 
-    if (!response.ok) {
-      console.error(`Failed to fetch SportyBet: ${response.status}`);
-      return [];
+        const response = await fetch(url, {
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
+            'Accept': 'application/json, text/plain, */*',
+            'Accept-Language': 'en-US,en;q=0.9',
+            'Referer': 'https://www.sportybet.com/ng/',
+            'Origin': 'https://www.sportybet.com',
+          },
+        });
+
+        if (!response.ok) {
+          console.log(`⚠️  ${sport.name}: API returned ${response.status}`);
+          continue;
+        }
+
+        const data = await response.json();
+
+        if (data.bizCode === 10000 && data.data && data.data.tournaments) {
+          const tournaments = data.data.tournaments;
+          let sportEventCount = 0;
+
+          for (const tournament of tournaments) {
+            if (tournament.events && Array.isArray(tournament.events)) {
+              for (const event of tournament.events) {
+                games.push({
+                  sport: sport.name,
+                  league: tournament.name || 'Unknown League',
+                  country: tournament.categoryName || event.sport?.category?.name || 'International',
+                  homeTeam: event.homeTeamName || 'Home',
+                  awayTeam: event.awayTeamName || 'Away',
+                  matchTime: new Date(event.estimateStartTime || Date.now()),
+                  marketId: event.eventId || event.gameId,
+                });
+                sportEventCount++;
+              }
+            }
+          }
+
+          console.log(`   ✅ ${sport.name}: Found ${sportEventCount} games across ${tournaments.length} tournaments`);
+        }
+      } catch (error: any) {
+        console.log(`   ⚠️  ${sport.name}: ${error.message}`);
+      }
+
+      // Small delay between requests to be respectful
+      await new Promise(resolve => setTimeout(resolve, 200));
     }
 
-    const html = await response.text();
-    const $ = cheerio.load(html);
-
-    // SportyBet typically embeds game data in script tags or data attributes
-    // We'll extract from the HTML structure
-
-    // Try to find match containers
-    $('.m-event, .event-item, [class*="match"]').each((_, element) => {
-      try {
-        const $el = $(element);
-
-        // Extract team names (common patterns)
-        const homeTeam = $el.find('[class*="home"], .team-home, .team:first').text().trim();
-        const awayTeam = $el.find('[class*="away"], .team-away, .team:last').text().trim();
-
-        // Extract league info
-        const league = $el.closest('[class*="league"], [class*="competition"]')
-          .find('[class*="league-name"], [class*="tournament"]')
-          .first()
-          .text()
-          .trim();
-
-        // Extract match time
-        const timeStr = $el.find('[class*="time"], [class*="date"]').text().trim();
-
-        if (homeTeam && awayTeam) {
-          games.push({
-            sport: 'Soccer',
-            league: league || 'Unknown League',
-            country: 'Nigeria', // Default to Nigeria since it's SportyBet NG
-            homeTeam,
-            awayTeam,
-            matchTime: new Date(), // Will be parsed from timeStr
-            marketId: $el.attr('data-market-id') || $el.attr('id'),
-          });
-        }
-      } catch (err) {
-        // Skip malformed entries
-      }
-    });
-
-    console.log(`✅ Found ${games.length} games on SportyBet`);
+    console.log(`✅ Total: Found ${games.length} games on SportyBet`);
 
   } catch (error) {
     console.error('❌ Error fetching SportyBet games:', error);
@@ -122,52 +119,47 @@ export async function fetchSportyBetGames(): Promise<SportyBetGame[]> {
 }
 
 /**
- * Fetch available leagues from SportyBet
+ * Fetch available leagues from SportyBet using official API
  */
 export async function fetchSportyBetLeagues(): Promise<SportyBetLeague[]> {
   const leagues: SportyBetLeague[] = [];
 
   try {
-    console.log('🔍 Fetching available leagues from SportyBet...');
+    console.log('🔍 Fetching available leagues from SportyBet API...');
 
-    const sports = ['football', 'basketball', 'tennis', 'ice-hockey', 'american-football'];
+    const timestamp = Date.now();
+    const url = `https://www.sportybet.com/api/ng/factsCenter/sportList?productId=1&option=1&_t=${timestamp}`;
 
-    for (const sport of sports) {
-      const url = `https://www.sportybet.com/ng/sport/${sport}/today`;
+    const response = await fetch(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
+        'Accept': 'application/json, text/plain, */*',
+        'Accept-Language': 'en-US,en;q=0.9',
+        'Referer': 'https://www.sportybet.com/ng/',
+      },
+    });
 
-      const response = await fetch(url, {
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-        },
-      });
-
-      if (!response.ok) continue;
-
-      const html = await response.text();
-      const $ = cheerio.load(html);
-
-      // Extract league information
-      $('[class*="league"], [class*="tournament"], [class*="competition"]').each((_, element) => {
-        const $el = $(element);
-        const leagueName = $el.find('[class*="name"], [class*="title"]').first().text().trim();
-        const matchCount = $el.find('.m-event, .event-item, [class*="match"]').length;
-
-        if (leagueName && matchCount > 0) {
-          leagues.push({
-            sport: sport === 'football' ? 'Soccer' :
-                   sport === 'ice-hockey' ? 'Ice Hockey' :
-                   sport === 'american-football' ? 'American Football' :
-                   sport.charAt(0).toUpperCase() + sport.slice(1),
-            country: 'Various',
-            leagueName,
-            matchCount,
-          });
-        }
-      });
+    if (!response.ok) {
+      console.log(`⚠️  SportyBet leagues API returned ${response.status}`);
+      return [];
     }
 
-    console.log(`✅ Found ${leagues.length} active leagues on SportyBet`);
+    const data = await response.json();
+
+    if (data.bizCode === 10000 && data.data) {
+      const sportsList = data.data;
+
+      for (const sport of sportsList) {
+        leagues.push({
+          sport: sport.name || 'Unknown Sport',
+          country: 'Various',
+          leagueName: sport.name || 'Unknown League',
+          matchCount: sport.eventSize || 0,
+        });
+      }
+    }
+
+    console.log(`✅ Found ${leagues.length} active sports/leagues on SportyBet`);
 
   } catch (error) {
     console.error('❌ Error fetching SportyBet leagues:', error);
