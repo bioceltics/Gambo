@@ -108,13 +108,20 @@ export interface OddsData {
     yes: number;
     no: number;
   };
+  bookmaker?: string;
+  lastUpdate?: Date;
   // Odds movement tracking
-  openingOdds: {
+  opening?: {
     homeWin: number;
     draw?: number;
     awayWin: number;
   };
-  oddsMovement: OddsMovement[];
+  openingOdds?: {
+    homeWin: number;
+    draw?: number;
+    awayWin: number;
+  };
+  oddsMovement?: OddsMovement[];
 }
 
 export interface OddsMovement {
