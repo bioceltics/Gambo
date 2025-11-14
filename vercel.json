@@ -6,6 +6,10 @@
     {
       "path": "/api/cron/generate-bundles",
       "schedule": "0 22 * * *"
+    },
+    {
+      "path": "/api/cron/update-results",
+      "schedule": "*/5 * * * *"
     }
   ]
 }
