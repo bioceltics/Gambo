@@ -203,44 +203,45 @@ async function convertBetsAPIFixtureToMatchBets(fixture: BetsAPIFixture): Promis
     }
 
     // Map pick to correct odds and bet type
-    let pickOdds: number;
+    let pickOdds: number | undefined;
     let betType: 'h2h' | 'totals' | 'spread' | 'btts' | 'doubleChance' = 'h2h';
 
     // Normalize the pick string (remove extra formatting like (1X), (X2), etc.)
     const normalizedPick = pick.replace(/\s*\([^)]*\)\s*/g, '').trim();
 
     // Map AI pick to correct odds and bet type
+    // CRITICAL: Only use actual odds from API - NO FALLBACKS to prevent wrong odds
     // Double Chance Markets (check first as they're more specific)
     if (normalizedPick.includes('Home') && normalizedPick.includes('Draw')) {
-      pickOdds = fixture.odds.doubleChance?.homeOrDraw || fixture.odds.homeWin;
+      pickOdds = fixture.odds.doubleChance?.homeOrDraw;
       betType = 'doubleChance';
     } else if (normalizedPick.includes('Away') && normalizedPick.includes('Draw')) {
-      pickOdds = fixture.odds.doubleChance?.awayOrDraw || fixture.odds.awayWin;
+      pickOdds = fixture.odds.doubleChance?.awayOrDraw;
       betType = 'doubleChance';
     }
     // BTTS Markets
     else if (normalizedPick.includes('BTTS Yes') || normalizedPick === 'Yes' && pick.includes('BTTS')) {
-      pickOdds = fixture.odds.btts?.yes || fixture.odds.homeWin;
+      pickOdds = fixture.odds.btts?.yes;
       betType = 'btts';
     } else if (normalizedPick.includes('BTTS No') || normalizedPick === 'No' && pick.includes('BTTS')) {
-      pickOdds = fixture.odds.btts?.no || fixture.odds.awayWin;
+      pickOdds = fixture.odds.btts?.no;
       betType = 'btts';
     }
     // Totals Markets (Over/Under) - Use the best line we calculated
     else if (normalizedPick.startsWith('Over')) {
-      // If we have a best line analysis, use that; otherwise fall back to default
+      // If we have a best line analysis, use that; otherwise use default
       if (bestOverUnderLine && bestOverUnderLine.pick === 'Over') {
         pickOdds = bestOverUnderLine.odds;
       } else {
-        pickOdds = fixture.odds.overUnder?.over || fixture.odds.homeWin;
+        pickOdds = fixture.odds.overUnder?.over;
       }
       betType = 'totals';
     } else if (normalizedPick.startsWith('Under')) {
-      // If we have a best line analysis, use that; otherwise fall back to default
+      // If we have a best line analysis, use that; otherwise use default
       if (bestOverUnderLine && bestOverUnderLine.pick === 'Under') {
         pickOdds = bestOverUnderLine.odds;
       } else {
-        pickOdds = fixture.odds.overUnder?.under || fixture.odds.awayWin;
+        pickOdds = fixture.odds.overUnder?.under;
       }
       betType = 'totals';
     }
@@ -252,13 +253,19 @@ async function convertBetsAPIFixtureToMatchBets(fixture: BetsAPIFixture): Promis
       pickOdds = fixture.odds.awayWin;
       betType = 'h2h';
     } else if (normalizedPick === 'Draw') {
-      pickOdds = fixture.odds.draw || 3.5;
+      pickOdds = fixture.odds.draw;
       betType = 'h2h';
     }
-    // Fallback to home win
+    // No fallback - if we don't have odds, skip this bet
     else {
-      pickOdds = fixture.odds.homeWin;
-      betType = 'h2h';
+      console.log(`   ⚠️  Skipping ${fixture.homeTeam} vs ${fixture.awayTeam}: Unknown pick "${normalizedPick}"`);
+      return bets;
+    }
+
+    // CRITICAL: Skip bet if odds are not available - NO FAKE ODDS
+    if (!pickOdds || pickOdds <= 1.0) {
+      console.log(`   ⚠️  Skipping ${fixture.homeTeam} vs ${fixture.awayTeam}: No valid odds for ${pick} (${betType})`);
+      return bets;
     }
 
     // Create single bet with best pick (Master Analysis or AI)
@@ -898,80 +905,111 @@ async function generateIntelligentBundles() {
   const allBets: MatchBet[] = [];
 
   // PRIORITY 1: Fetch from BetsAPI (comprehensive global coverage)
+  // PERFORMANCE OPTIMIZATION: Fetch all 5 sports in PARALLEL for faster execution
   if (hasBetsAPI) {
-    console.log('🚀 Fetching from BetsAPI (ALL global leagues and competitions)...\n');
+    console.log('🚀 Fetching from BetsAPI (ALL 5 sports in parallel for maximum speed)...\n');
+    generationStatusManager.updateStep('🌍 Fetching all sports in parallel');
 
-    // Fetch Soccer (ALL 1000+ global leagues)
+    // Create array of fetch promises for parallel execution
+    const fetchPromises: Promise<MatchBet[]>[] = [];
+
+    // Soccer
     if (betsapiSoccerToken && betsapiSoccerToken !== 'your_betsapi_soccer_token_here') {
-      console.log('⚽ SOCCER - Fetching ALL global leagues...');
-      generationStatusManager.updateStep('⚽ Fetching soccer fixtures');
-      try {
-        const soccerBets = await fetchAllSoccerFromBetsAPI(betsapiSoccerToken, tomorrow, endOfTomorrow);
-        if (soccerBets.length > 0) {
-          allBets.push(...soccerBets);
-          console.log(`✅ Soccer: ${soccerBets.length} betting opportunities\n`);
-          generationStatusManager.addActivity(`⚽ Found ${soccerBets.length} soccer opportunities`);
-        }
-      } catch (error: any) {
-        console.log(`⚠️  BetsAPI Soccer error: ${error.message}\n`);
-      }
+      console.log('⚽ SOCCER - Starting fetch...');
+      fetchPromises.push(
+        fetchAllSoccerFromBetsAPI(betsapiSoccerToken, tomorrow, endOfTomorrow)
+          .then(bets => {
+            console.log(`✅ Soccer: ${bets.length} betting opportunities\n`);
+            generationStatusManager.addActivity(`⚽ Found ${bets.length} soccer opportunities`);
+            return bets;
+          })
+          .catch((error: any) => {
+            console.log(`⚠️  BetsAPI Soccer error: ${error.message}\n`);
+            return [];
+          })
+      );
     }
 
-    // Fetch Basketball (ALL global competitions)
+    // Basketball
     if (betsapiBasketballToken && betsapiBasketballToken !== 'your_betsapi_basketball_token_here') {
-      console.log('🏀 BASKETBALL - Fetching ALL global competitions...');
-      try {
-        const basketballBets = await fetchAllBasketballFromBetsAPI(betsapiBasketballToken, tomorrow, endOfTomorrow);
-        if (basketballBets.length > 0) {
-          allBets.push(...basketballBets);
-          console.log(`✅ Basketball: ${basketballBets.length} betting opportunities\n`);
-        }
-      } catch (error: any) {
-        console.log(`⚠️  BetsAPI Basketball error: ${error.message}\n`);
-      }
+      console.log('🏀 BASKETBALL - Starting fetch...');
+      fetchPromises.push(
+        fetchAllBasketballFromBetsAPI(betsapiBasketballToken, tomorrow, endOfTomorrow)
+          .then(bets => {
+            console.log(`✅ Basketball: ${bets.length} betting opportunities\n`);
+            generationStatusManager.addActivity(`🏀 Found ${bets.length} basketball opportunities`);
+            return bets;
+          })
+          .catch((error: any) => {
+            console.log(`⚠️  BetsAPI Basketball error: ${error.message}\n`);
+            return [];
+          })
+      );
     }
 
-    // Fetch Tennis (ALL tournaments)
+    // Tennis
     if (betsapiTennisToken && betsapiTennisToken !== 'your_betsapi_tennis_token_here') {
-      console.log('🎾 TENNIS - Fetching ALL tournaments...');
-      try {
-        const tennisBets = await fetchAllTennisFromBetsAPI(betsapiTennisToken, tomorrow, endOfTomorrow);
-        if (tennisBets.length > 0) {
-          allBets.push(...tennisBets);
-          console.log(`✅ Tennis: ${tennisBets.length} betting opportunities\n`);
-        }
-      } catch (error: any) {
-        console.log(`⚠️  BetsAPI Tennis error: ${error.message}\n`);
-      }
+      console.log('🎾 TENNIS - Starting fetch...');
+      fetchPromises.push(
+        fetchAllTennisFromBetsAPI(betsapiTennisToken, tomorrow, endOfTomorrow)
+          .then(bets => {
+            console.log(`✅ Tennis: ${bets.length} betting opportunities\n`);
+            generationStatusManager.addActivity(`🎾 Found ${bets.length} tennis opportunities`);
+            return bets;
+          })
+          .catch((error: any) => {
+            console.log(`⚠️  BetsAPI Tennis error: ${error.message}\n`);
+            return [];
+          })
+      );
     }
 
-    // Fetch Hockey (ALL leagues)
+    // Hockey
     if (betsapiHockeyToken && betsapiHockeyToken !== 'your_betsapi_hockey_token_here') {
-      console.log('🏒 HOCKEY - Fetching ALL leagues...');
-      try {
-        const hockeyBets = await fetchAllHockeyFromBetsAPI(betsapiHockeyToken, tomorrow, endOfTomorrow);
-        if (hockeyBets.length > 0) {
-          allBets.push(...hockeyBets);
-          console.log(`✅ Hockey: ${hockeyBets.length} betting opportunities\n`);
-        }
-      } catch (error: any) {
-        console.log(`⚠️  BetsAPI Hockey error: ${error.message}\n`);
-      }
+      console.log('🏒 HOCKEY - Starting fetch...');
+      fetchPromises.push(
+        fetchAllHockeyFromBetsAPI(betsapiHockeyToken, tomorrow, endOfTomorrow)
+          .then(bets => {
+            console.log(`✅ Hockey: ${bets.length} betting opportunities\n`);
+            generationStatusManager.addActivity(`🏒 Found ${bets.length} hockey opportunities`);
+            return bets;
+          })
+          .catch((error: any) => {
+            console.log(`⚠️  BetsAPI Hockey error: ${error.message}\n`);
+            return [];
+          })
+      );
     }
 
-    // Fetch American Football (ALL leagues)
+    // American Football
     if (betsapiFootballToken && betsapiFootballToken !== 'your_betsapi_football_token_here') {
-      console.log('🏈 FOOTBALL - Fetching ALL leagues...');
-      try {
-        const footballBets = await fetchAllFootballFromBetsAPI(betsapiFootballToken, tomorrow, endOfTomorrow);
-        if (footballBets.length > 0) {
-          allBets.push(...footballBets);
-          console.log(`✅ Football: ${footballBets.length} betting opportunities\n`);
-        }
-      } catch (error: any) {
-        console.log(`⚠️  BetsAPI Football error: ${error.message}\n`);
-      }
+      console.log('🏈 FOOTBALL - Starting fetch...');
+      fetchPromises.push(
+        fetchAllFootballFromBetsAPI(betsapiFootballToken, tomorrow, endOfTomorrow)
+          .then(bets => {
+            console.log(`✅ Football: ${bets.length} betting opportunities\n`);
+            generationStatusManager.addActivity(`🏈 Found ${bets.length} football opportunities`);
+            return bets;
+          })
+          .catch((error: any) => {
+            console.log(`⚠️  BetsAPI Football error: ${error.message}\n`);
+            return [];
+          })
+      );
     }
+
+    // Wait for ALL sports to complete in parallel
+    console.log(`\n⏳ Fetching ${fetchPromises.length} sports in parallel...\n`);
+    const allSportsResults = await Promise.all(fetchPromises);
+
+    // Combine all results
+    allSportsResults.forEach(sportBets => {
+      if (sportBets.length > 0) {
+        allBets.push(...sportBets);
+      }
+    });
+
+    console.log(`\n✅ PARALLEL FETCH COMPLETE: ${allBets.length} total opportunities across all sports\n`);
   }
 
   // FALLBACK: If no BetsAPI, try legacy APIs
@@ -1485,9 +1523,21 @@ async function analyzeMatchAllMarkets(event: any, sport: Sport, league: string):
 }
 
 /**
- * Create 10 specialized bundles according to specification
+ * Create 10 specialized bundles according to EXACT USER SPECIFICATIONS
  * CRITICAL: System scans ALL sports (Soccer, Basketball, Tennis, Hockey, Football)
  * and intelligently combines opportunities from different sports for better risk distribution
+ *
+ * EXACT TEMPLATE REQUIREMENTS:
+ * 1. +2 odds free - 2-3 games (combined odds 2-3)
+ * 2. +5 odds mixed sports Basic - 4-5 games (combined odds 5-6)
+ * 3. +5 odds Mixed sports Pro - 4-5 games (combined odds 5-6)
+ * 4. +5 odds Mixed sports Pro - 4-5 games (combined odds 5-6)
+ * 5. +5 BTTS soccer bundle pro - 4-5 games (combined odds 5-6)
+ * 6. +5 odds only soccer bundle Ultimate - 4-5 games (combined odds 5-6)
+ * 7. +5 odds over/under soccer bundle - ultimate - 4-5 games (combined odds 5-6)
+ * 8. +5 players to score soccer bundle - ultimate - 4-5 games (combined odds 5-6)
+ * 9. 10 odds weekend mixed sports - ultimate - 6-7 games (combined odds 10-11)
+ * 10. +20 odds special - ultimate - 7-8 games (combined odds 20-21)
  */
 async function createSpecializedBundles(allBets: MatchBet[]) {
   const now = new Date();
@@ -1510,73 +1560,206 @@ async function createSpecializedBundles(allBets: MatchBet[]) {
   console.log(`   🏒 Hockey: ${hockeyBets.length} | 🏈 Football: ${footballBets.length}`);
   console.log(`   🌍 Multi-Sport Pool: ${mixedSportsBets.length}\n`);
 
-  // Bundle 1: +2 odds free (MINIMUM 2 games - safe picks)
-  const freeBets = h2hBets.filter(b => b.odds >= 1.4 && b.odds <= 2.0 && b.confidenceScore >= 75)
-    .sort((a, b) => b.confidenceScore - a.confidenceScore)
-    .slice(0, 2); // MINIMUM 2 GAMES
+  // Bundle 1: +2 odds free - 2-3 games (combined odds 2-3)
+  const freeBets = selectBetsForOddsRange(h2hBets, 2, 3, 2, 3);
+  console.log(`   Bundle 1 (+2 Odds Free): Selected ${freeBets.length} bets`);
   if (freeBets.length >= 2) {
     await createBundle('+2 Odds Free', 'STANDARD', 'FREE', freeBets, now, -15);
   }
 
-  // Bundle 2: +5 odds mixed sports Basic
-  const basicMixed = selectBetsForOddsTarget(mixedSportsBets, 5, 4);
-  console.log(`   Bundle 2 (Basic +5 Odds): Selected ${basicMixed.length} bets`);
+  // Bundle 2: +5 odds mixed sports Basic - 4-5 games (combined odds 5-6)
+  const basicMixed = selectBetsForOddsRange(mixedSportsBets, 5, 6, 4, 5);
+  console.log(`   Bundle 2 (+5 Odds Mixed Sports Basic): Selected ${basicMixed.length} bets`);
   if (basicMixed.length >= 2) {
     await createBundle('+5 Odds Mixed Sports Basic', 'STANDARD', 'BASIC', basicMixed, now, -14);
   }
 
-  // Bundle 3: +5 odds mixed sports Pro
-  const proMixed1 = selectBetsForOddsTarget(mixedSportsBets.filter(b => !basicMixed.includes(b)), 5, 4);
+  // Bundle 3: +5 odds Mixed sports Pro - 4-5 games (combined odds 5-6)
+  const proMixed1 = selectBetsForOddsRange(mixedSportsBets.filter(b => !basicMixed.includes(b)), 5, 6, 4, 5);
+  console.log(`   Bundle 3 (+5 Odds Mixed Sports Pro): Selected ${proMixed1.length} bets`);
   if (proMixed1.length >= 2) {
     await createBundle('+5 Odds Mixed Sports Pro', 'STANDARD', 'PRO', proMixed1, now, -13);
   }
 
-  // Bundle 4: +5 odds mixed sports Pro (different selection)
-  const proMixed2 = selectBetsForOddsTarget(mixedSportsBets.filter(b => !basicMixed.includes(b) && !proMixed1.includes(b)), 5, 4);
+  // Bundle 4: +5 odds Mixed sports Pro - 4-5 games (combined odds 5-6) - different selection
+  const proMixed2 = selectBetsForOddsRange(mixedSportsBets.filter(b => !basicMixed.includes(b) && !proMixed1.includes(b)), 5, 6, 4, 5);
+  console.log(`   Bundle 4 (+5 Odds Mixed Sports Pro #2): Selected ${proMixed2.length} bets`);
   if (proMixed2.length >= 2) {
     await createBundle('+5 Odds Mixed Sports Pro', 'STANDARD', 'PRO', proMixed2, now, -12);
   }
 
-  // Bundle 5: +5 BTTS soccer bundle Pro
-  const bttsPicks = selectBetsForOddsTarget(bttsBets, 5, 4);
+  // Bundle 5: +5 BTTS soccer bundle pro - 4-5 games (combined odds 5-6)
+  const bttsPicks = selectBetsForOddsRange(bttsBets, 5, 6, 4, 5);
+  console.log(`   Bundle 5 (+5 BTTS Soccer Bundle Pro): Selected ${bttsPicks.length} bets`);
   if (bttsPicks.length >= 2) {
-    await createBundle('+5 Odds BTTS Soccer Bundle Pro', 'STANDARD', 'PRO', bttsPicks, now, -11);
+    await createBundle('+5 BTTS Soccer Bundle Pro', 'STANDARD', 'PRO', bttsPicks, now, -11);
   }
 
-  // Bundle 6: +5 odds only soccer bundle Ultimate
-  const soccerH2H = selectBetsForOddsTarget(soccerBets.filter(b => b.betType === 'h2h'), 5, 4);
+  // Bundle 6: +5 odds only soccer bundle Ultimate - 4-5 games (combined odds 5-6)
+  const soccerH2H = selectBetsForOddsRange(soccerBets.filter(b => b.betType === 'h2h'), 5, 6, 4, 5);
+  console.log(`   Bundle 6 (+5 Only Soccer Bundle Ultimate): Selected ${soccerH2H.length} bets`);
   if (soccerH2H.length >= 2) {
-    await createBundle('+5 Odds Only Soccer Bundle Ultimate', 'STANDARD', 'ULTIMATE', soccerH2H, now, -10);
+    await createBundle('+5 Only Soccer Bundle Ultimate', 'STANDARD', 'ULTIMATE', soccerH2H, now, -10);
   }
 
-  // Bundle 7: +5 odds over/under soccer bundle Ultimate
-  const soccerTotals = selectBetsForOddsTarget(soccerBets.filter(b => b.betType === 'totals'), 5, 4);
+  // Bundle 7: +5 odds over/under soccer bundle - ultimate - 4-5 games (combined odds 5-6)
+  const soccerTotals = selectBetsForOddsRange(soccerBets.filter(b => b.betType === 'totals'), 5, 6, 4, 5);
+  console.log(`   Bundle 7 (+5 Over/Under Soccer Bundle Ultimate): Selected ${soccerTotals.length} bets`);
   if (soccerTotals.length >= 2) {
-    await createBundle('+5 Odds Over/Under Soccer Bundle Ultimate', 'STANDARD', 'ULTIMATE', soccerTotals, now, -9);
+    await createBundle('+5 Over/Under Soccer Bundle Ultimate', 'STANDARD', 'ULTIMATE', soccerTotals, now, -9);
   }
 
-  // Bundle 8: +5 players to score soccer bundle Ultimate
+  // Bundle 8: +5 players to score soccer bundle - ultimate - 4-5 games (combined odds 5-6)
   const highConfBets = soccerBets.filter(b => b.confidenceScore >= 70).sort((a, b) => b.confidenceScore - a.confidenceScore);
-  const confidentPicks = selectBetsForOddsTarget(highConfBets, 5, 4);
+  const confidentPicks = selectBetsForOddsRange(highConfBets, 5, 6, 4, 5);
+  console.log(`   Bundle 8 (+5 Players To Score Soccer Bundle Ultimate): Selected ${confidentPicks.length} bets`);
   if (confidentPicks.length >= 2) {
-    await createBundle('+5 Odds Players To Score Soccer Bundle Ultimate', 'STANDARD', 'ULTIMATE', confidentPicks, now, -8);
+    await createBundle('+5 Players To Score Soccer Bundle Ultimate', 'STANDARD', 'ULTIMATE', confidentPicks, now, -8);
   }
 
-  // Bundle 9: 10 odds weekend mixed sports Ultimate (7-9 games)
-  const weekend10x = selectBetsForOddsTarget(mixedSportsBets, 10, 9);
-  if (weekend10x.length >= 7) {
+  // Bundle 9: 10 odds weekend mixed sports - ultimate - 6-7 games (combined odds 10-11)
+  const weekend10x = selectBetsForOddsRange(mixedSportsBets, 10, 11, 6, 7);
+  console.log(`   Bundle 9 (10 Odds Weekend Mixed Sports Ultimate): Selected ${weekend10x.length} bets`);
+  if (weekend10x.length >= 2) {
     await createBundle('10 Odds Weekend Mixed Sports Ultimate', 'WEEKEND_PLUS_10', 'ULTIMATE', weekend10x, now, -7);
   }
 
-  // Bundle 10: +20 odds special Ultimate (7-9 games)
-  const special20x = selectBetsForOddsTarget(h2hBets, 20, 9);
-  if (special20x.length >= 7) {
+  // Bundle 10: +20 odds special - ultimate - 7-8 games (combined odds 20-21)
+  const special20x = selectBetsForOddsRange(h2hBets, 20, 21, 7, 8);
+  console.log(`   Bundle 10 (+20 Odds Special Ultimate): Selected ${special20x.length} bets`);
+  if (special20x.length >= 2) {
     await createBundle('+20 Odds Special Ultimate', 'WEEKEND_PLUS_10', 'ULTIMATE', special20x, now, -6);
   }
 }
 
 /**
- * Select bets to reach a target combined odds
+ * Select bets to fit within exact odds range and game count range
+ * NEW FUNCTION for exact template matching
+ * @param bets - Available bets to select from
+ * @param minOdds - Minimum combined odds (e.g., 2, 5, 10, 20)
+ * @param maxOdds - Maximum combined odds (e.g., 3, 6, 11, 21)
+ * @param minGames - Minimum number of games (e.g., 2, 4, 6, 7)
+ * @param maxGames - Maximum number of games (e.g., 3, 5, 7, 8)
+ */
+function selectBetsForOddsRange(
+  bets: MatchBet[],
+  minOdds: number,
+  maxOdds: number,
+  minGames: number,
+  maxGames: number
+): MatchBet[] {
+  if (bets.length === 0) return [];
+
+  // CRITICAL: Filter out risky high-odds picks (max 3.0 per game)
+  const safeBets = bets.filter(b => b.odds <= 3.0 && b.confidenceScore >= 75);
+
+  if (safeBets.length === 0) {
+    console.log('   ⚠️  No safe picks available, using safest bets');
+    const sorted = [...bets].sort((a, b) => b.confidenceScore - a.confidenceScore);
+    return sorted.slice(0, Math.min(maxGames, Math.max(minGames, sorted.length)));
+  }
+
+  // Calculate ideal odds per game to reach target range
+  const targetMidpoint = (minOdds + maxOdds) / 2;
+  const targetGameCount = (minGames + maxGames) / 2;
+  const idealOddsPerGame = Math.pow(targetMidpoint, 1 / targetGameCount);
+
+  // Sort bets by confidence and odds proximity to ideal
+  // IMPORTANT: No bias towards any particular pick type - optimize for value only
+  const sorted = [...safeBets].sort((a, b) => {
+    // Priority 1: Higher confidence (but allow for diversity)
+    if (Math.abs(a.confidenceScore - b.confidenceScore) > 5) {
+      return b.confidenceScore - a.confidenceScore;
+    }
+
+    // Priority 2: Prefer diverse bet types for better risk distribution
+    // Away Win, Over/Under, BTTS, Double Chance have same priority as Home Win
+    const betTypeScore = (bet: MatchBet) => {
+      // All bet types are equal - no bias
+      if (bet.betType === 'totals') return 1; // Over/Under adds variety
+      if (bet.betType === 'btts') return 1; // BTTS adds variety
+      if (bet.betType === 'doubleChance') return 1; // Double chance adds safety
+      if (bet.pick.includes('Away')) return 1; // Away picks add variety
+      return 1; // Home picks same priority
+    };
+
+    // Priority 3: Odds closer to ideal per-game odds
+    const aDistance = Math.abs(a.odds - idealOddsPerGame);
+    const bDistance = Math.abs(b.odds - idealOddsPerGame);
+    return aDistance - bDistance;
+  });
+
+  // Try different game counts within the range to find best fit
+  for (let gameCount = maxGames; gameCount >= minGames; gameCount--) {
+    const selected: MatchBet[] = [];
+    let currentOdds = 1;
+    const includedSports = new Set<Sport>();
+
+    for (const bet of sorted) {
+      if (selected.length >= gameCount) break;
+
+      // Encourage sport diversity
+      const sportAlreadyIncluded = includedSports.has(bet.sport);
+      if (sportAlreadyIncluded && selected.filter(s => s.sport === bet.sport).length >= 2) {
+        continue; // Max 2 games from same sport
+      }
+
+      const newOdds = currentOdds * bet.odds;
+
+      // Check if adding this bet keeps us in valid range
+      const remainingGames = gameCount - selected.length - 1;
+
+      if (remainingGames === 0) {
+        // This is the last game - check if final odds will be in range
+        if (newOdds >= minOdds && newOdds <= maxOdds) {
+          selected.push(bet);
+          includedSports.add(bet.sport);
+          currentOdds = newOdds;
+          break;
+        }
+      } else {
+        // Not the last game - check if we can still reach minOdds with remaining games
+        // Assume remaining games will have average odds of 1.5 (conservative)
+        const minPossibleFinalOdds = newOdds * Math.pow(1.5, remainingGames);
+        const maxPossibleFinalOdds = newOdds * Math.pow(3.0, remainingGames);
+
+        // Only add if there's a path to reach the target range
+        if (maxPossibleFinalOdds >= minOdds && minPossibleFinalOdds <= maxOdds) {
+          selected.push(bet);
+          includedSports.add(bet.sport);
+          currentOdds = newOdds;
+        }
+      }
+    }
+
+    // Check if this selection meets all criteria
+    if (selected.length >= minGames && selected.length <= maxGames) {
+      const finalOdds = selected.reduce((acc, b) => acc * b.odds, 1);
+      if (finalOdds >= minOdds && finalOdds <= maxOdds) {
+        const avgConf = selected.reduce((acc, b) => acc + b.confidenceScore, 0) / selected.length;
+        const sportCounts = new Map<Sport, number>();
+        selected.forEach(bet => sportCounts.set(bet.sport, (sportCounts.get(bet.sport) || 0) + 1));
+        const sportsUsed = Array.from(sportCounts.keys()).map(s => getSportEmoji(s)).join('');
+        const diversityInfo = sportCounts.size > 1 ? ` [${sportsUsed} ${sportCounts.size} sports]` : ` [${sportsUsed} single-sport]`;
+
+        console.log(`   ✅ ${selected.length} games: ${finalOdds.toFixed(2)}x odds (target: ${minOdds}-${maxOdds}), ${avgConf.toFixed(1)}% avg confidence${diversityInfo}`);
+        return selected;
+      }
+    }
+  }
+
+  // Fallback: return best effort selection
+  console.log(`   ⚠️  Could not find perfect match for ${minOdds}-${maxOdds}x with ${minGames}-${maxGames} games`);
+  const fallback = sorted.slice(0, minGames);
+  if (fallback.length >= 2) {
+    const finalOdds = fallback.reduce((acc, b) => acc * b.odds, 1);
+    console.log(`   📊 Fallback: ${fallback.length} games with ${finalOdds.toFixed(2)}x odds`);
+  }
+  return fallback.length >= 2 ? fallback : [];
+}
+
+/**
+ * Select bets to reach a target combined odds (LEGACY - kept for compatibility)
  * SAFE STRATEGY: Prioritizes low-risk picks with high confidence
  * CROSS-SPORT INTELLIGENCE: Actively seeks opportunities from different sports for better risk distribution
  * Enforces minimum 2 games per bundle
@@ -1605,15 +1788,8 @@ function selectBetsForOddsTarget(bets: MatchBet[], targetOdds: number, maxPicks:
       return b.confidenceScore - a.confidenceScore;
     }
 
-    // Second priority: Prioritize Home Win over Away Win (home advantage)
-    const aIsHomeWin = a.pick.toLowerCase().includes('home win');
-    const bIsHomeWin = b.pick.toLowerCase().includes('home win');
-    if (aIsHomeWin && !bIsHomeWin) {
-      return -1; // a (Home Win) comes first
-    }
-    if (!aIsHomeWin && bIsHomeWin) {
-      return 1; // b (Home Win) comes first
-    }
+    // Second priority: NO BIAS - all pick types equal
+    // Removed Home Win bias to show diverse betting opportunities
 
     // Third priority: Odds close to ideal for target
     if (targetOdds >= 5) {
